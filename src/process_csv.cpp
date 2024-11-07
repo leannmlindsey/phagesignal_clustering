@@ -3,7 +3,8 @@
 #include <sstream>
 #include <string>
 #include <vector>
-
+#include <filesystem>
+namespace fs = std::filesystem;
 // Function to process CSV file with prediction data
 void process_predictions_csv(const std::string& input_filename, 
                            const std::string& output_filename,
@@ -68,18 +69,17 @@ void process_predictions_csv(const std::string& input_filename,
 }
 
 int main(int argc, char* argv[]) {
-    // Check if input filename is provided
+    // Check if input path is provided
     if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " <input_csv_file> [threshold]" << std::endl;
-        std::cerr << "Example: " << argv[0] << " predictions.csv 0.5" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " <input_path> [threshold]" << std::endl;
+        std::cerr << "input_path can be a single file or directory" << std::endl;
+        std::cerr << "Example: " << argv[0] << " ../data/raw_inference_data 0.5" << std::endl;
         return 1;
     }
 
-    std::string input_filename = argv[1];
-    // Generate output filename by adding "processed_" prefix
-    std::string output_filename = "processed_" + input_filename;
+    std::string input_path = argv[1];
     
-    // Get threshold from command line if provided, otherwise use default 0.5
+    // Get threshold from command line if provided
     double threshold = 0.5;
     if (argc >= 3) {
         try {
@@ -90,9 +90,36 @@ int main(int argc, char* argv[]) {
     }
 
     try {
-        process_predictions_csv(input_filename, output_filename, threshold);
-        std::cout << "File processed successfully!" << std::endl;
-        std::cout << "Output written to: " << output_filename << std::endl;
+        if (fs::is_directory(input_path)) {
+        // Process all CSV files in directory
+        for (const auto& entry : fs::directory_iterator(input_path)) {
+            if (entry.path().extension() == ".csv") {
+                std::string input_file = entry.path().string();
+                std::string base_filename = entry.path().filename().string();
+                std::string output_file = "../data/processed_data/" + base_filename;
+                
+                try {
+                    std::cout << "Processing: " << input_file << std::endl;
+                    process_predictions_csv(input_file, output_file, threshold);
+                } catch (const std::exception& e) {
+                    std::cerr << "Error processing file " << input_file << ": " << e.what() << std::endl;
+                    std::cerr << "Continuing with next file..." << std::endl;
+                    continue;  // Skip to next file instead of stopping
+                }
+            }
+        }
+        std::cout << "Processing completed. Check error messages above for any skipped files." << std::endl;   
+        } else {
+            // Process single file
+            size_t last_slash = input_path.find_last_of("/\\");
+            std::string base_filename = (last_slash != std::string::npos) ? 
+                input_path.substr(last_slash + 1) : input_path;
+            std::string output_file = "../data/processed_data/" + base_filename;
+            
+            process_predictions_csv(input_path, output_file, threshold);
+            std::cout << "File processed successfully!" << std::endl;
+            std::cout << "Output written to: " << output_file << std::endl;
+        }
     }
     catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
